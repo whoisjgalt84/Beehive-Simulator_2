@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Beehive Construction Simulator — v3.1</title>
+  <title>Beehive Construction Simulator — v3.2</title>
   <style>
     /* =========================
        Summer palette + clear separation
@@ -75,7 +75,7 @@
 <body>
   <div class="wrap">
     <aside class="panel">
-      <h1>Beehive Construction Simulator — v3.1</h1>
+      <h1>Beehive Construction Simulator — v3.2</h1>
       <p>Brood core → pollen ring → honey rim. Adjust colony size & resources to influence growth and storage dynamics.</p>
 
       <div class="ctrl">
@@ -117,11 +117,13 @@
   </div>
 
   <script>
+  'use strict';
   ;(() => {
     /* =========================
-       v3.1 — Always-visible panel + summer theme
+       v3.2 — Always-visible panel + summer theme
        Separation: Layout ▸ Grid ▸ Renderer ▸ Controller
-       Patch: center-locked via delta translation on any resize
+       FIX: single source of truth for loop state (no duplicate let),
+            guaranteed init order, and center-locked delta on resize.
     ========================= */
 
     // ===== Layout Manager =====
@@ -175,7 +177,7 @@
         }
       }
       const center = gridMap.get(key(0,0));
-      if(center) center.built = true; // seed
+      if(center) center.built = true; // seed center
       return R;
     }
 
@@ -238,8 +240,6 @@
     const radiusOut = document.getElementById('radiusOut');
     const fpsEl = document.getElementById('fps');
 
-    let running = true, last = performance.now(), fpsAvg = 0;
-
     function applySliders(){ params.bees=parseInt(beeCountEl.value,10); beeCountOut.textContent=params.bees; params.resMul=resourceEl.value/100; resourceOut.textContent=params.resMul.toFixed(2)+'×'; }
 
     beeCountEl.addEventListener('input',()=>{
@@ -248,7 +248,7 @@
       else if(diff<0){ bees.length = desired; }
     });
     resourceEl.addEventListener('input',()=>{ params.resMul = resourceEl.value/100; resourceOut.textContent = params.resMul.toFixed(2)+'×'; });
-    pauseBtn.addEventListener('click',()=>{ running = !running; pauseBtn.textContent = running? 'Pause':'Resume'; });
+    pauseBtn.addEventListener('click',()=>{ state.running = !state.running; pauseBtn.textContent = state.running? 'Pause':'Resume'; });
     resetBtn.addEventListener('click',()=>{ init(true); });
 
     // ===== Simulation update =====
@@ -277,16 +277,15 @@
     }
 
     // ===== Stats & Loop =====
+    const state = { running:true, last: performance.now(), fpsAvg:0 };
+
     function updateStats(){ let built=0,honey=0,pollen=0,brood=0; for(const c of grid){ if(c.built) built++; if(c.honey>0.02) honey++; if(c.pollen>0.02) pollen++; if(c.brood>0.02) brood++; } cellsBuiltEl.textContent=built; cellsHoneyEl.textContent=honey; cellsPollenEl.textContent=pollen; cellsBroodEl.textContent=brood; }
 
-    function frame(t){ const dt=Math.min(0.05,(t-last)/1000); last=t; if(running){ update(dt); updateStats(); } render(); const fps=1/Math.max(1e-6,dt); fpsAvg=fpsAvg*0.9+fps*0.1; fpsEl.textContent=fps.toFixed(0); requestAnimationFrame(frame); }
+    function frame(t){ const dt=Math.min(0.05,(t-state.last)/1000); state.last=t; if(state.running){ update(dt); updateStats(); } render(); const fps=1/Math.max(1e-6,dt); state.fpsAvg=state.fpsAvg*0.9+fps*0.1; fpsEl.textContent=fps.toFixed(0); requestAnimationFrame(frame); }
 
     // ===== Init & resize hooks =====
     function init(resetAll=false){ const {dx,dy}=layout.resize(); if(resetAll){ buildGrid(layout.W,layout.H); spawnBees(params.bees); } const R=Math.max(8, Math.floor(Math.min(layout.W,layout.H)/(HEX_W*0.9))); radiusOut.textContent = R + ' cells'; applySliders(); recenterBees(dx,dy); }
     window.addEventListener('resize', ()=>{ const {dx,dy}=layout.resize(); recenterBees(dx,dy); });
-
-    // local state
-    let running=true,last=performance.now(),fpsAvg=0;
 
     init(true); requestAnimationFrame(frame);
   })();
