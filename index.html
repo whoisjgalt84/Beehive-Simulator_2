@@ -41,7 +41,7 @@
     .stat{font-size:12px;color:var(--ink-dim);display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:6px}
     canvas{display:block;width:100%;height:100%}
     .canvas-wrap{position:relative}
-    .overlay{position:absolute;left:10px;top:10px;background:rgba(9,14,22,.5);backdrop-filter:blur(4px);padding:8px 10px;border-radius:10px;border:1px solid #18253c;font-size:12px;color:var(--ink-dim)}
+    .overlay{position:absolute;left:10px;top:10px;background:rgba(9,14,22,.5);backdrop-filter:blur(4px);padding:8px 10px;border-radius:10px;border:1px solid #18253c;font-size:12px;color:var(--ink-dim);z-index:5}
     .overlay b{color:var(--ink)}
     .footer{position:absolute;left:0;right:0;bottom:8px;text-align:center;color:#70839c;font-size:12px}
     .number{font-variant-numeric:tabular-nums}
@@ -61,6 +61,12 @@
       body.panel-collapsed .wrap{ grid-template-rows: 0 1fr; }
     }
 
+    /* Floating toggle visible when collapsed (so you can restore controls) */
+    .fab-toggle{ position:fixed; right:10px; top:10px; z-index:10; display:none; background:#0f1728; border:1px solid #2b3f65; color:var(--ink); padding:10px 12px; border-radius:12px; font-size:14px; }
+    @media (max-width: 860px){
+      body.panel-collapsed .fab-toggle{ display:inline-flex; }
+    }
+
     /* iOS Safari fallback when 100dvh misbehaves */
     @supports not (height: 100dvh){
       .wrap{ height: calc(var(--vh) * 100); }
@@ -68,6 +74,9 @@
   </style>
 </head>
 <body>
+  <!-- Floating toggle appears only when panel is collapsed on mobile -->
+  <button class="fab-toggle" id="togglePanelFloating" aria-label="Show controls">☰ Show controls</button>
+
   <div class="wrap">
     <aside class="panel">
       <div class="mobile-bar" aria-hidden="true">
@@ -125,16 +134,17 @@
   setVH();
   window.addEventListener('resize', setVH);
 
-  // Mobile collapse toggle
+  // Mobile collapse toggle (both buttons)
   const toggleBtn = document.getElementById('togglePanel');
-  if(toggleBtn){
-    toggleBtn.addEventListener('click',()=>{
-      const collapsed = document.body.classList.toggle('panel-collapsed');
-      toggleBtn.textContent = collapsed ? '☰ Show controls' : '☰ Hide controls';
-      // Trigger resize to re-fit canvas
-      resize();
-    });
+  const toggleFab = document.getElementById('togglePanelFloating');
+  function togglePanel(){
+    const collapsed = document.body.classList.toggle('panel-collapsed');
+    if(toggleBtn) toggleBtn.textContent = collapsed ? '☰ Show controls' : '☰ Hide controls';
+    if(toggleFab) toggleFab.setAttribute('aria-label', collapsed ? 'Show controls' : 'Hide controls');
+    resize(); // re-fit canvas and recenter
   }
+  if(toggleBtn) toggleBtn.addEventListener('click', togglePanel);
+  if(toggleFab) toggleFab.addEventListener('click', togglePanel);
 
   const beeCountEl = document.getElementById('beeCount');
   const beeCountOut = document.getElementById('beeCountOut');
@@ -164,7 +174,8 @@
   const BROOD_RATE = 0.004;
   const POLLEN_RATE = 0.003;
 
-  let W=0,H=0; resize();
+  let W=0,H=0; let centerX=0, centerY=0;
+  resize();
   window.addEventListener('resize', resize);
 
   // Hex math
@@ -176,6 +187,10 @@
 
   function axialToPixel(q,r){
     return { x: (q*HEX_HORIZ), y: (r*HEX_H + (q*HEX_H)/2) };
+  }
+  function cellCenter(c){
+    const p = axialToPixel(c.q,c.r);
+    return { x: centerX + p.x, y: centerY + p.y };
   }
   function hexDistance(q,r){ return (Math.abs(q)+Math.abs(r)+Math.abs(q+r))/2; }
 
@@ -204,10 +219,7 @@
   let fpsAvg = 0;
 
   function makeCell(q,r){
-    const pos = axialToPixel(q,r);
-    const x = innerWidth/2 + pos.x; // temporary; will recalc in resize
-    const y = innerHeight/2 + pos.y;
-    const c = {q,r,x,y,built:false,honey:0,pollen:0,brood:0,neighbors:null,dist: hexDistance(q,r)};
+    const c = {q,r,built:false,honey:0,pollen:0,brood:0,neighbors:null,dist: hexDistance(q,r)};
     grid.set(key(q,r), c);
     cellList.push(c);
     return c;
@@ -238,8 +250,9 @@
   function initBees(n){
     bees.length = 0;
     const c = getCell(0,0);
+    const cc = cellCenter(c);
     for(let i=0;i<n;i++){
-      bees.push({ cell:c, x:c.x + (Math.random()-0.5)*4, y:c.y + (Math.random()-0.5)*4, hx:[c.x], hy:[c.y], speed:0.6+Math.random()*0.6, target:null });
+      bees.push({ cell:c, x:cc.x + (Math.random()-0.5)*4, y:cc.y + (Math.random()-0.5)*4, hx:[cc.x], hy:[cc.y], speed:0.6+Math.random()*0.6, target:null });
     }
   }
 
@@ -255,7 +268,8 @@
     if(diff>0){
       for(let i=0;i<diff;i++){
         const c = getCell(0,0);
-        bees.push({cell:c,x:c.x,y:c.y,hx:[c.x],hy:[c.y],speed:0.6+Math.random()*0.6,target:null});
+        const cc = cellCenter(c);
+        bees.push({cell:c,x:cc.x,y:cc.y,hx:[cc.x],hy:[cc.y],speed:0.6+Math.random()*0.6,target:null});
       }
     } else if(diff<0){ bees.length = desired; }
   });
@@ -278,12 +292,12 @@
 
   function updateBees(dt){
     const res = resourceEl.value/100; // 0..2
-    const buildRate = 0.0018*res;
-    const fillRate  = 0.002*res;
-    const broodRate = 0.004*res;
-    const pollenRate= 0.003*res;
+    const buildRate = BUILD_BASE_RATE*res;
+    const fillRate  = HONEY_FILL_RATE*res;
+    const broodRate = BROOD_RATE*res;
+    const pollenRate= POLLEN_RATE*res;
 
-    if(Math.random() < 0.002*res){
+    if(Math.random() < SEED_JUMP_CHANCE*res){
       const built = cellList.filter(c=>c.built);
       if(built.length){
         const seed = built[(Math.random()*built.length)|0];
@@ -293,20 +307,21 @@
 
     for(const b of bees){
       if(!b.target || Math.random()<0.02){ b.target = pickNextCell(b.cell); }
-      const tx = b.target.x + (Math.random()-0.5)*2;
-      const ty = b.target.y + (Math.random()-0.5)*2;
+      const tCenter = cellCenter(b.target);
+      const tx = tCenter.x + (Math.random()-0.5)*2;
+      const ty = tCenter.y + (Math.random()-0.5)*2;
       const dx = tx - b.x, dy = ty - b.y;
       const dist = Math.hypot(dx,dy)+1e-6;
       const step = Math.min(dist, b.speed*dt*60);
       b.x += dx/dist*step; b.y += dy/dist*step;
       b.hx.push(b.x); b.hy.push(b.y);
-      if(b.hx.length>15){ b.hx.shift(); b.hy.shift(); }
+      if(b.hx.length>TRAIL_LEN){ b.hx.shift(); b.hy.shift(); }
       if(dist<2.5){
         b.cell = b.target; const c = b.cell;
         if(!c.built){ if(Math.random()<buildRate*dt*60) c.built=true; }
         else {
-          if(c.dist <= 6){ if(Math.random()<broodRate*dt*60){ c.brood=Math.min(1,c.brood+0.08*Math.random()); c.honey=0; c.pollen=0; } }
-          else if(c.dist>7 && c.dist<=11){ if(Math.random()<pollenRate*dt*60){ c.pollen=Math.min(1,c.pollen+0.08*Math.random()); if(c.pollen>0.2){ c.honey=0; c.brood=0; } } }
+          if(c.dist <= BROOD_TARGET_RADIUS){ if(Math.random()<broodRate*dt*60){ c.brood=Math.min(1,c.brood+0.08*Math.random()); c.honey=0; c.pollen=0; } }
+          else if(c.dist>POLLEN_RING_IN && c.dist<=POLLEN_RING_OUT){ if(Math.random()<pollenRate*dt*60){ c.pollen=Math.min(1,c.pollen+0.08*Math.random()); if(c.pollen>0.2){ c.honey=0; c.brood=0; } } }
           else { if(Math.random()<fillRate*dt*60){ c.honey=Math.min(1,c.honey+0.05*Math.random()); if(c.honey>0.2){ c.pollen=0; c.brood=0; } } }
         }
       }
@@ -316,24 +331,26 @@
   function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     for(const c of cellList){
-      if(c.x < -HEX_W || c.x > W+HEX_W || c.y < -HEX_H || c.y > H+HEX_H) continue;
+      const cc = cellCenter(c);
+      const x = cc.x, y = cc.y;
+      if(x < -HEX_W || x > W+HEX_W || y < -HEX_H || y > H+HEX_H) continue;
       if(c.built){
-        drawHex(c.x,c.y,'rgba(255,233,166,0.9)','rgba(247,216,120,0.8)');
-        if(c.brood>0){ const a = 0.35 + 0.55*c.brood; drawHex(c.x,c.y,`rgba(255,183,166,${a})`,'rgba(255,210,210,0.9)'); }
+        drawHex(x,y,'rgba(255,233,166,0.9)','rgba(247,216,120,0.8)');
+        if(c.brood>0){ const a = 0.35 + 0.55*c.brood; drawHex(x,y,`rgba(255,183,166,${a})`,'rgba(255,210,210,0.9)'); }
         if(c.pollen>0 && c.brood===0){
-          const gP = ctx.createLinearGradient(c.x-HEX_SIZE, c.y-HEX_SIZE, c.x+HEX_SIZE, c.y+HEX_SIZE);
+          const gP = ctx.createLinearGradient(x-HEX_SIZE, y-HEX_SIZE, x+HEX_SIZE, y+HEX_SIZE);
           gP.addColorStop(0, `rgba(255,213,74,${0.25+0.5*c.pollen})`);
           gP.addColorStop(1, `rgba(228,165,0,${0.35+0.5*c.pollen})`);
-          drawHex(c.x,c.y,gP,'rgba(255,220,120,0.9)');
+          drawHex(x,y,gP,'rgba(255,220,120,0.9)');
         }
         if(c.honey>0 && c.brood===0 && c.pollen===0){
-          const g = ctx.createLinearGradient(c.x, c.y-HEX_SIZE, c.x, c.y+HEX_SIZE);
+          const g = ctx.createLinearGradient(x, y-HEX_SIZE, x, y+HEX_SIZE);
           g.addColorStop(0, 'rgba(244,162,89,'+(0.35+0.45*c.honey)+')');
           g.addColorStop(1, 'rgba(204,119,23,'+(0.45+0.45*c.honey)+')');
-          drawHex(c.x,c.y,g,'rgba(255,210,110,0.9)');
+          drawHex(x,y,g,'rgba(255,210,110,0.9)');
         }
       } else {
-        drawHex(c.x,c.y,null,'rgba(255,255,255,0.05)');
+        drawHex(x,y,null,'rgba(255,255,255,0.05)');
       }
     }
     ctx.lineWidth = 1.5*DPR; ctx.lineCap = 'round';
@@ -366,10 +383,23 @@
   }
 
   function resize(){
+    const prevCenterX = centerX, prevCenterY = centerY;
     const rect = canvas.parentElement.getBoundingClientRect();
     let Wcss = Math.floor(rect.width), Hcss = Math.floor(rect.height);
     if(!CSS.supports('height','100dvh')){ Hcss = Math.floor(window.innerHeight); }
     W = Wcss; H = Hcss;
+    centerX = W/2; centerY = H/2;
+
+    // shift bees by the delta so the hive stays centered when layout changes
+    const dx = centerX - (isNaN(prevCenterX)? centerX : prevCenterX);
+    const dy = centerY - (isNaN(prevCenterY)? centerY : prevCenterY);
+    if(dx || dy){
+      for(const b of bees){
+        b.x += dx; b.y += dy;
+        for(let i=0;i<b.hx.length;i++){ b.hx[i]+=dx; b.hy[i]+=dy; }
+      }
+    }
+
     canvas.width = Math.floor(W*DPR); canvas.height = Math.floor(H*DPR);
     canvas.style.width = W+'px'; canvas.style.height = H+'px';
     ctx.setTransform(DPR,0,0,DPR,0,0);
