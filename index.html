@@ -3,77 +3,87 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Beehive Construction Simulator — v3</title>
+  <title>Beehive Construction Simulator — v3.1</title>
   <style>
-    /* ===== Design tokens ===== */
+    /* =========================
+       Summer palette + clear separation
+    ========================= */
     :root{
-      --bg:#0b0f14; --panel:#111826; --ink:#cfe8ff; --ink-dim:#96a7be;
+      /* Summer sky gradient for canvas area */
+      --sky-1:#c8f1ff;   /* light sky */
+      --sky-2:#8ee3f5;   /* blue */
+      --sea:#9ff3d2;     /* mint/sea */
+
+      /* Warm sand panel */
+      --panel:#fff3c4;   /* sand */
+      --panel-ink:#2c2a22; /* dark text in panel */
+      --panel-muted:#6b6653; /* muted text */
+      --panel-border:#e6d9a0; /* border */
+
+      /* Comb + bees */
       --wax:#ffe9a6; --wax-line:#f7d878;
       --honey:#f4a259; --honey-deep:#cc7717;
       --pollen:#ffd54a; --pollen-deep:#e4a500;
       --brood:#ffb7a6; --bee:#ffd100; --bee-2:#ffb000;
-      --accent:#5eead4; --vh:1vh;
+
+      --accent:#ff7a59; /* coral accent */
+      --ink:#0a2230;    /* default ink on canvas area */
+      --ink-dim:#31576a;
+
+      --vh:1vh; /* iOS fallback */
     }
 
     /* ===== Base layout ===== */
-    html,body{height:100%;margin:0;background:linear-gradient(180deg,#0a0f15,#0b0f14 20%,#0a0e12);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    .wrap{display:grid;grid-template-columns:320px 1fr;height:100dvh}
-    .panel{background:var(--panel);padding:18px 16px 14px;border-right:1px solid #0f1623;box-shadow:inset -1px 0 0 #0a111d}
-    h1{font-size:20px;margin:0 0 10px;letter-spacing:.3px}
-    p{color:var(--ink-dim);margin:.25rem 0 .75rem}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--sky-1),var(--sea) 70%, var(--sky-2));color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    .wrap{display:grid;grid-template-columns:340px 1fr;height:100dvh}
+
+    /* Clear separation: warm panel vs cool canvas */
+    .panel{background:var(--panel);color:var(--panel-ink);padding:18px 16px 14px;border-right:2px solid var(--panel-border);box-shadow:inset -1px 0 0 rgba(0,0,0,.05)}
+    h1{font-size:20px;margin:0 0 10px;letter-spacing:.2px}
+    p{color:var(--panel-muted);margin:.25rem 0 .75rem}
     .ctrl{margin:12px 0 18px}
-    .ctrl label{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-dim)}
+    .ctrl label{display:flex;justify-content:space-between;font-size:13px;color:var(--panel-muted)}
     .ctrl input[type=range]{width:100%;height:34px}
     .row{display:flex;gap:10px;margin-top:10px}
-    .btn{flex:1;background:#0f1728;border:1px solid #2b3f65;color:var(--ink);padding:14px 14px;border-radius:14px;cursor:pointer;font-weight:600;letter-spacing:.2px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
-    .btn:hover{border-color:#5b86d8;transform:translateY(-1px);box-shadow:0 8px 22px rgba(0,0,0,.35)}
+    .btn{flex:1;background:white;border:2px solid var(--panel-border);color:var(--panel-ink);padding:12px 14px;border-radius:14px;cursor:pointer;font-weight:700;letter-spacing:.2px;box-shadow:0 3px 10px rgba(0,0,0,.06)}
+    .btn:hover{border-color:var(--accent);transform:translateY(-1px)}
     .btn:active{transform:translateY(0)}
-    .btn--primary{background:linear-gradient(180deg,#1b2a44,#132036);border-color:#6be8d8;outline:2px solid rgba(94,234,212,.35)}
+    .btn--primary{background:linear-gradient(180deg,#fff,#fff6de)}
+
     .legend{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
-    .key{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)}
-    .sw{width:16px;height:12px;border-radius:3px;border:1px solid #29364e}
-    .stat{font-size:12px;color:var(--ink-dim);display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:6px}
-    .number{font-variant-numeric:tabular-nums}
+    .key{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--panel-muted)}
+    .sw{width:16px;height:12px;border-radius:3px;border:1px solid #d5c78f}
+    .stat{font-size:12px;color:var(--panel-muted);display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:6px}
+    .number{font-variant-numeric:tabular-nums;color:var(--panel-ink)}
 
-    .canvas-wrap{position:relative}
+    .canvas-wrap{position:relative;background:radial-gradient(1200px 600px at 50% 30%, rgba(255,255,255,.45), rgba(255,255,255,0))}
     canvas{display:block;width:100%;height:100%}
-    .overlay{position:absolute;left:10px;top:10px;background:rgba(9,14,22,.5);backdrop-filter:blur(4px);padding:8px 10px;border-radius:10px;border:1px solid #18253c;font-size:12px;color:var(--ink-dim);z-index:5}
-    .overlay b{color:var(--ink)}
-    .footer{position:absolute;left:0;right:0;bottom:8px;text-align:center;color:#70839c;font-size:12px}
+    .overlay{position:absolute;left:10px;top:10px;background:rgba(255,255,255,.45);backdrop-filter:blur(4px);padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.6);font-size:12px;color:#1d3b4a;z-index:5}
+    .overlay b{color:#08202b}
+    .footer{position:absolute;left:0;right:0;bottom:8px;text-align:center;color:#1d3b4a;font-size:12px;text-shadow:0 1px 0 rgba(255,255,255,.35)}
 
-    /* ===== Mobile: 60/40 + collapsible panel + floating toggle ===== */
+    /* ===== Mobile: controls (40dvh) + canvas (60dvh), panel always visible ===== */
     @media (max-width: 860px){
       .wrap{ grid-template-columns: 1fr; grid-template-rows: 40dvh 1fr; height: 100dvh; }
-      .panel{ border-right:none; border-bottom:1px solid #0f1623; max-height:40dvh; overflow:auto; }
-      .mobile-bar{ display:flex; gap:8px; align-items:center; margin:-6px 0 10px; }
-      .mobile-toggle{ background:#0f1728; border:1px solid #2b3f65; color:var(--ink); padding:8px 10px; border-radius:10px; font-size:14px; }
-      body.panel-collapsed .panel{ display:none; }
-      body.panel-collapsed .wrap{ grid-template-rows: 0 1fr; }
-      body.panel-collapsed .fab-toggle{ display:inline-flex; }
+      .panel{ border-right:none; border-bottom:2px solid var(--panel-border); max-height:40dvh; overflow:auto; }
     }
-    .fab-toggle{ position:fixed; right:10px; top:10px; z-index:10; display:none; background:#0f1728; border:1px solid #2b3f65; color:var(--ink); padding:10px 12px; border-radius:12px; font-size:14px; }
 
     /* iOS fallback if 100dvh unsupported */
     @supports not (height: 100dvh){ .wrap{ height: calc(var(--vh) * 100); } }
   </style>
 </head>
 <body>
-  <button class="fab-toggle" id="togglePanelFloating" aria-label="Show controls">☰ Show controls</button>
   <div class="wrap">
     <aside class="panel">
-      <div class="mobile-bar" aria-hidden="true">
-        <button class="mobile-toggle" id="togglePanel">☰ Hide controls</button>
-        <span style="color:#90a4c3;font-size:12px">(tap to maximize canvas)</span>
-      </div>
-      <h1>Beehive Construction Simulator — v3</h1>
-      <p>Brood core → pollen ring → honey outer. Adjust colony size and resources to influence growth and storage dynamics.</p>
+      <h1>Beehive Construction Simulator — v3.1</h1>
+      <p>Brood core → pollen ring → honey rim. Adjust colony size & resources to influence growth and storage dynamics.</p>
 
       <div class="ctrl">
         <label>Colony size <span><span id="beeCountOut" class="number">160</span> bees</span></label>
         <input id="beeCount" type="range" min="10" max="800" value="160" />
       </div>
       <div class="ctrl">
-        <label>Resource availability <span><span id="resourceOut">1.00×</span></span></label>
+        <label>Resource availability <span><span id="resourceOut" class="number">1.00×</span></span></label>
         <input id="resource" type="range" min="0" max="200" value="100" />
       </div>
       <div class="row">
@@ -96,11 +106,11 @@
         <span>Cells with honey</span><span id="cellsHoney" class="number">0</span>
       </div>
 
-      <p style="margin-top:12px">Tip: Collapse the controls on phones (☰) for full-screen comb.</p>
+      <p style="margin-top:12px;color:var(--panel-muted)">Panel stays visible; canvas is always centered and locked when resizing or rotating.</p>
     </aside>
 
     <main class="canvas-wrap">
-      <canvas id="c"></canvas>
+      <canvas id="c" aria-label="Beehive canvas"></canvas>
       <div class="overlay">Comb radius: <b id="radiusOut">—</b> · FPS: <b id="fps">—</b></div>
       <div class="footer">© Beehive model (simplified): random walk + local attachment + spatial brood/pollen preference.</div>
     </main>
@@ -109,13 +119,10 @@
   <script>
   ;(() => {
     /* =========================
-       v3 — clean modular architecture
-       - Layout: size, center, collapse + center delta
-       - Grid: axial-only comb
-       - Renderer: pure draw
-       - Controller: UI + tick
-       - Patch: recenter bees & trails by exact delta on any layout change
-    ========================== */
+       v3.1 — Always-visible panel + summer theme
+       Separation: Layout ▸ Grid ▸ Renderer ▸ Controller
+       Patch: center-locked via delta translation on any resize
+    ========================= */
 
     // ===== Layout Manager =====
     const canvas = document.getElementById('c');
@@ -144,25 +151,12 @@
       }
     };
 
-    // mobile collapse controls
-    const toggleBtn = document.getElementById('togglePanel');
-    const toggleFab = document.getElementById('togglePanelFloating');
-    function togglePanel(){
-      const collapsed = document.body.classList.toggle('panel-collapsed');
-      if(toggleBtn) toggleBtn.textContent = collapsed ? '☰ Show controls' : '☰ Hide controls';
-      if(toggleFab) toggleFab.setAttribute('aria-label', collapsed ? 'Show controls' : 'Hide controls');
-      const {dx,dy} = layout.resize();
-      recenterBees(dx,dy);
-    }
-    toggleBtn && toggleBtn.addEventListener('click', togglePanel);
-    toggleFab && toggleFab.addEventListener('click', togglePanel);
-
     // ===== Grid (axial) =====
     const HEX_SIZE = 14;
     const sqrt3 = Math.sqrt(3);
     const HEX_W = HEX_SIZE * 2;
     const HEX_H = sqrt3 * HEX_SIZE;
-    const HEX_HORIZ = 1.5 * HEX_SIZE;
+    const HEX_HORIZ = 1.5 * HEX_SIZE; // dx between columns
 
     const grid = [];
     const gridMap = new Map();
@@ -181,7 +175,7 @@
         }
       }
       const center = gridMap.get(key(0,0));
-      center.built = true;
+      if(center) center.built = true; // seed
       return R;
     }
 
@@ -194,7 +188,7 @@
       }
     }
 
-    // ===== Params =====
+    // ===== Parameters =====
     const params = {
       bees: 160,
       resMul: 1.0,
@@ -219,8 +213,16 @@
         bees.push({ cell:c, x:cc.x+(Math.random()-0.5)*4, y:cc.y+(Math.random()-0.5)*4, hx:[cc.x], hy:[cc.y], speed:0.6+Math.random()*0.6, target:null });
       }
     }
+
     function recenterBees(dx,dy){ if(!dx && !dy) return; for(const b of bees){ b.x+=dx; b.y+=dy; for(let i=0;i<b.hx.length;i++){ b.hx[i]+=dx; b.hy[i]+=dy; } } }
-    function pickNextCell(c){ ensureNeighbors(c); const ns = neighbors(c.q,c.r).map(([q,r])=>get(q,r)); const choices=[]; for(const n of ns){ const base=1,bias=n?.built?5:1,edge=Math.max(0,1-(n?.honey||0)); const w=base+bias+edge; for(let k=0;k<w;k++) choices.push(n); } return choices[(Math.random()*choices.length)|0]||c; }
+
+    function pickNextCell(c){
+      ensureNeighbors(c);
+      const ns = neighbors(c.q,c.r).map(([q,r])=>get(q,r));
+      const choices=[];
+      for(const n of ns){ const base=1,bias=n?.built?5:1,edge=Math.max(0,1-(n?.honey||0)); const w=base+bias+edge; for(let k=0;k<w;k++) choices.push(n); }
+      return choices[(Math.random()*choices.length)|0]||c;
+    }
 
     // ===== UI Controller =====
     const beeCountEl = document.getElementById('beeCount');
@@ -265,23 +267,26 @@
     }
 
     // ===== Renderer =====
-    function drawHex(x,y,fill,stroke){ const a=(Math.PI/180)*30; ctx.beginPath(); for(let i=0;i<6;i++){ const ang=a+i*Math.PI/3; const px=x+HEX_SIZE*Math.cos(ang); const py=y+HEX_SIZE*Math.sin(ang); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);} ctx.closePath(); if(fill){ ctx.fillStyle=fill; ctx.fill(); } ctx.lineWidth=1*DPR; ctx.strokeStyle=stroke||'rgba(255,255,255,0.08)'; ctx.stroke(); }
+    function drawHex(x,y,fill,stroke){ const a=(Math.PI/180)*30; ctx.beginPath(); for(let i=0;i<6;i++){ const ang=a+i*Math.PI/3; const px=x+HEX_SIZE*Math.cos(ang); const py=y+HEX_SIZE*Math.sin(ang); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);} ctx.closePath(); if(fill){ ctx.fillStyle=fill; ctx.fill(); } ctx.lineWidth=1*DPR; ctx.strokeStyle=stroke||'rgba(0,0,0,0.08)'; ctx.stroke(); }
     function render(){
       ctx.clearRect(0,0,layout.W,layout.H);
-      for(const c of grid){ const p=axialToPixel(c.q,c.r,layout.cx,layout.cy); const x=p.x,y=p.y; if(x<-HEX_W||x>layout.W+HEX_W||y<-HEX_H||y>layout.H+HEX_H) continue; if(c.built){ drawHex(x,y,'rgba(255,233,166,0.9)','rgba(247,216,120,0.8)'); if(c.brood>0){ const a=0.35+0.55*c.brood; drawHex(x,y,`rgba(255,183,166,${a})`,'rgba(255,210,210,0.9)'); } if(c.pollen>0&&c.brood===0){ const gP=ctx.createLinearGradient(x-HEX_SIZE,y-HEX_SIZE,x+HEX_SIZE,y+HEX_SIZE); gP.addColorStop(0,`rgba(255,213,74,${0.25+0.5*c.pollen})`); gP.addColorStop(1,`rgba(228,165,0,${0.35+0.5*c.pollen})`); drawHex(x,y,gP,'rgba(255,220,120,0.9)'); } if(c.honey>0&&c.brood===0&&c.pollen===0){ const g=ctx.createLinearGradient(x,y-HEX_SIZE,x,y+HEX_SIZE); g.addColorStop(0,'rgba(244,162,89,'+(0.35+0.45*c.honey)+')'); g.addColorStop(1,'rgba(204,119,23,'+(0.45+0.45*c.honey)+')'); drawHex(x,y,g,'rgba(255,210,110,0.9)'); } } else { drawHex(x,y,null,'rgba(255,255,255,0.05)'); } }
+      for(const c of grid){ const p=axialToPixel(c.q,c.r,layout.cx,layout.cy); const x=p.x,y=p.y; if(x<-HEX_W||x>layout.W+HEX_W||y<-HEX_H||y>layout.H+HEX_H) continue; if(c.built){ drawHex(x,y,'rgba(255,233,166,0.9)','rgba(247,216,120,0.8)'); if(c.brood>0){ const a=0.35+0.55*c.brood; drawHex(x,y,`rgba(255,183,166,${a})`,'rgba(255,210,210,0.9)'); } if(c.pollen>0&&c.brood===0){ const gP=ctx.createLinearGradient(x-HEX_SIZE,y-HEX_SIZE,x+HEX_SIZE,y+HEX_SIZE); gP.addColorStop(0,`rgba(255,213,74,${0.25+0.5*c.pollen})`); gP.addColorStop(1,`rgba(228,165,0,${0.35+0.5*c.pollen})`); drawHex(x,y,gP,'rgba(255,220,120,0.9)'); } if(c.honey>0&&c.brood===0&&c.pollen===0){ const g=ctx.createLinearGradient(x,y-HEX_SIZE,x,y+HEX_SIZE); g.addColorStop(0,'rgba(244,162,89,'+(0.35+0.45*c.honey)+')'); g.addColorStop(1,'rgba(204,119,23,'+(0.45+0.45*c.honey)+')'); drawHex(x,y,g,'rgba(255,210,110,0.9)'); } } else { drawHex(x,y,null,'rgba(0,0,0,0.05)'); } }
       ctx.lineWidth=1.5*DPR; ctx.lineCap='round';
       for(const b of bees){ ctx.beginPath(); for(let i=0;i<b.hx.length;i++){ const t=i/(b.hx.length-1); const alpha=t*0.35; if(i>0){ ctx.strokeStyle=`rgba(255,209,0,${alpha})`; ctx.moveTo(b.hx[i-1],b.hy[i-1]); ctx.lineTo(b.hx[i],b.hy[i]); ctx.stroke(); } } }
       for(const b of bees){ const grd=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,4*DPR); grd.addColorStop(0,'rgba(255,209,0,1)'); grd.addColorStop(1,'rgba(255,176,0,0.1)'); ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(b.x,b.y,3.2*DPR,0,Math.PI*2); ctx.fill(); }
     }
 
-    // ===== Stats & Game Loop =====
+    // ===== Stats & Loop =====
     function updateStats(){ let built=0,honey=0,pollen=0,brood=0; for(const c of grid){ if(c.built) built++; if(c.honey>0.02) honey++; if(c.pollen>0.02) pollen++; if(c.brood>0.02) brood++; } cellsBuiltEl.textContent=built; cellsHoneyEl.textContent=honey; cellsPollenEl.textContent=pollen; cellsBroodEl.textContent=brood; }
-    let running=true,last=performance.now(),fpsAvg=0;
+
     function frame(t){ const dt=Math.min(0.05,(t-last)/1000); last=t; if(running){ update(dt); updateStats(); } render(); const fps=1/Math.max(1e-6,dt); fpsAvg=fpsAvg*0.9+fps*0.1; fpsEl.textContent=fps.toFixed(0); requestAnimationFrame(frame); }
 
     // ===== Init & resize hooks =====
-    function init(resetAll=false){ const {dx,dy}=layout.resize(); if(resetAll){ buildGrid(layout.W,layout.H); spawnBees(params.bees); } radiusOut.textContent = Math.max(8, Math.floor(Math.min(layout.W,layout.H)/(HEX_W*0.9))) + ' cells'; applySliders(); recenterBees(dx,dy); }
+    function init(resetAll=false){ const {dx,dy}=layout.resize(); if(resetAll){ buildGrid(layout.W,layout.H); spawnBees(params.bees); } const R=Math.max(8, Math.floor(Math.min(layout.W,layout.H)/(HEX_W*0.9))); radiusOut.textContent = R + ' cells'; applySliders(); recenterBees(dx,dy); }
     window.addEventListener('resize', ()=>{ const {dx,dy}=layout.resize(); recenterBees(dx,dy); });
+
+    // local state
+    let running=true,last=performance.now(),fpsAvg=0;
 
     init(true); requestAnimationFrame(frame);
   })();
