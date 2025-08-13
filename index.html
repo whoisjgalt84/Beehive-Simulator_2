@@ -11,7 +11,6 @@
       --ink:#cfe8ff;
       --ink-dim:#96a7be;
       --wax:#ffe9a6;
-      --wax-line:#f7d878;
       --honey:#f4a259;
       --honey-deep:#cc7717;
       --pollen:#ffd54a;
@@ -20,7 +19,7 @@
       --bee:#ffd100;
       --bee-2:#ffb000;
       --accent:#5eead4;
-      --vh: 1vh; /* iOS fallback unit */
+      --vh: 1vh;
     }
     html,body{height:100%;margin:0;background:linear-gradient(180deg,#0a0f15,#0b0f14 20%,#0a0e12);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
     .wrap{display:grid;grid-template-columns:320px 1fr;height:100dvh;}
@@ -36,10 +35,10 @@
     .btn:active{transform:translateY(0)}
     .btn--primary{background:linear-gradient(180deg,#1b2a44,#132036);border-color:#6be8d8;outline:2px solid rgba(94,234,212,.35)}
     .btn--primary:hover{outline-color:rgba(94,234,212,.6)}
-    .stat{font-size:12px;color:var(--ink-dim);display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:6px}
     .legend{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
     .key{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)}
     .sw{width:16px;height:12px;border-radius:3px;border:1px solid #29364e}
+    .stat{font-size:12px;color:var(--ink-dim);display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:6px}
     canvas{display:block;width:100%;height:100%}
     .canvas-wrap{position:relative}
     .overlay{position:absolute;left:10px;top:10px;background:rgba(9,14,22,.5);backdrop-filter:blur(4px);padding:8px 10px;border-radius:10px;border:1px solid #18253c;font-size:12px;color:var(--ink-dim)}
@@ -47,11 +46,19 @@
     .footer{position:absolute;left:0;right:0;bottom:8px;text-align:center;color:#70839c;font-size:12px}
     .number{font-variant-numeric:tabular-nums}
 
-    /* Layout: stack panel on top on narrow screens */
+    /* MOBILE LAYOUT: sidebar 40% height, canvas 60% height */
     @media (max-width: 860px){
-      .wrap{ grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: 100dvh; }
-      .panel{ border-right: none; border-bottom: 1px solid #0f1623; }
+      .wrap{ grid-template-columns: 1fr; grid-template-rows: 40dvh 1fr; height: 100dvh; }
+      .panel{ border-right: none; border-bottom: 1px solid #0f1623; max-height: 40dvh; overflow:auto; }
       .canvas-wrap{ min-height: 0; }
+      .mobile-bar{ display:flex; gap:8px; align-items:center; margin:-6px 0 10px; }
+      .mobile-toggle{ background:#0f1728; border:1px solid #2b3f65; color:var(--ink); padding:8px 10px; border-radius:10px; font-size:14px; }
+    }
+
+    /* Collapsed mode: hide panel, canvas gets full height */
+    @media (max-width: 860px){
+      body.panel-collapsed .panel{ display:none; }
+      body.panel-collapsed .wrap{ grid-template-rows: 0 1fr; }
     }
 
     /* iOS Safari fallback when 100dvh misbehaves */
@@ -63,6 +70,10 @@
 <body>
   <div class="wrap">
     <aside class="panel">
+      <div class="mobile-bar" aria-hidden="true">
+        <button class="mobile-toggle" id="togglePanel">☰ Hide controls</button>
+        <span style="color:#90a4c3;font-size:12px">(tap to maximize canvas)</span>
+      </div>
       <h1>Beehive Construction Simulator</h1>
       <p>Watch hexagonal comb emerge as worker bees roam, build wax cells, and store resources. Adjust colony size and resource abundance to influence pace and pattern formation.</p>
       <div class="ctrl">
@@ -114,6 +125,17 @@
   setVH();
   window.addEventListener('resize', setVH);
 
+  // Mobile collapse toggle
+  const toggleBtn = document.getElementById('togglePanel');
+  if(toggleBtn){
+    toggleBtn.addEventListener('click',()=>{
+      const collapsed = document.body.classList.toggle('panel-collapsed');
+      toggleBtn.textContent = collapsed ? '☰ Show controls' : '☰ Hide controls';
+      // Trigger resize to re-fit canvas
+      resize();
+    });
+  }
+
   const beeCountEl = document.getElementById('beeCount');
   const beeCountOut = document.getElementById('beeCountOut');
   const resourceEl = document.getElementById('resource');
@@ -135,17 +157,17 @@
   const SEED_JUMP_CHANCE = 0.002; // chance to seed a new cluster
   const MAX_HONEY_PER_CELL = 1.0;
 
-  // New: simple brood/pollen spatial model (hex steps from center)
+  // Spatial model
   const BROOD_TARGET_RADIUS = 6;
   const POLLEN_RING_IN = 7;
   const POLLEN_RING_OUT = 11;
-  const BROOD_RATE = 0.004;   // laying/maintenance
-  const POLLEN_RATE = 0.003;  // storing pollen
+  const BROOD_RATE = 0.004;
+  const POLLEN_RATE = 0.003;
 
   let W=0,H=0; resize();
   window.addEventListener('resize', resize);
 
-  // Hex math (axial coords q,r)
+  // Hex math
   const sqrt3 = Math.sqrt(3);
   const HEX_W = HEX_SIZE*2;
   const HEX_H = sqrt3*HEX_SIZE;
@@ -153,10 +175,7 @@
   const HEX_VERT = HEX_H; // dy between rows
 
   function axialToPixel(q,r){
-    return {
-      x: (q*HEX_HORIZ),
-      y: (r*HEX_H + (q*HEX_H)/2)
-    };
+    return { x: (q*HEX_HORIZ), y: (r*HEX_H + (q*HEX_H)/2) };
   }
   function hexDistance(q,r){ return (Math.abs(q)+Math.abs(r)+Math.abs(q+r))/2; }
 
@@ -176,9 +195,9 @@
     ctx.stroke();
   }
 
-  // Grid generation within viewport bounds
+  // Grid
   let grid = new Map(); // key "q,r" -> cell
-  let cellList = []; // array of cells for fast iteration
+  let cellList = []; // array of cells
   let bees = [];
   let running = true;
   let last = performance.now();
@@ -186,8 +205,8 @@
 
   function makeCell(q,r){
     const pos = axialToPixel(q,r);
-    const x = W/2 + pos.x;
-    const y = H/2 + pos.y;
+    const x = innerWidth/2 + pos.x; // temporary; will recalc in resize
+    const y = innerHeight/2 + pos.y;
     const c = {q,r,x,y,built:false,honey:0,pollen:0,brood:0,neighbors:null,dist: hexDistance(q,r)};
     grid.set(key(q,r), c);
     cellList.push(c);
@@ -195,31 +214,16 @@
   }
 
   function key(q,r){return q+','+r}
-
-  function neighborCoords(q,r){
-    return [
-      [q+1,r],[q-1,r],[q,r+1],[q,r-1],[q+1,r-1],[q-1,r+1]
-    ];
-  }
-
-  function getCell(q,r){
-    return grid.get(key(q,r));
-  }
-
+  function neighborCoords(q,r){ return [[q+1,r],[q-1,r],[q,r+1],[q,r-1],[q+1,r-1],[q-1,r+1]]; }
+  function getCell(q,r){ return grid.get(key(q,r)); }
   function ensureNeighbors(c){
     if(c.neighbors) return c.neighbors;
-    const ns = neighborCoords(c.q,c.r).map(([q,r])=>{
-      let n = getCell(q,r);
-      if(!n){ n = makeCell(q,r);} 
-      return n;
-    });
-    c.neighbors = ns; 
-    return ns;
+    c.neighbors = neighborCoords(c.q,c.r).map(([q,r])=> getCell(q,r) || makeCell(q,r));
+    return c.neighbors;
   }
 
   function initGrid(){
     grid.clear(); cellList = [];
-    // create a disk of hexes that comfortably fills the view
     const radius = Math.floor(Math.min(W,H)/(HEX_W*0.9));
     const R = Math.max(8, Math.floor(radius));
     for(let q=-R;q<=R;q++){
@@ -227,43 +231,25 @@
         makeCell(q,r);
       }
     }
+    const center = getCell(0,0); center.built = true; ensureNeighbors(center);
     radiusOut.textContent = R + ' cells';
-
-    // Seed center cell as built
-    const center = getCell(0,0);
-    center.built = true;
-    ensureNeighbors(center);
   }
 
   function initBees(n){
     bees.length = 0;
+    const c = getCell(0,0);
     for(let i=0;i<n;i++){
-      const c = getCell(0,0);
-      bees.push({
-        cell: c,
-        x: c.x + (Math.random()-0.5)*4,
-        y: c.y + (Math.random()-0.5)*4,
-        hx: [c.x],
-        hy: [c.y],
-        speed: 0.6 + Math.random()*0.6,
-        target: null
-      });
+      bees.push({ cell:c, x:c.x + (Math.random()-0.5)*4, y:c.y + (Math.random()-0.5)*4, hx:[c.x], hy:[c.y], speed:0.6+Math.random()*0.6, target:null });
     }
   }
 
-  function reset(){
-    initGrid();
-    initBees(parseInt(beeCountEl.value,10));
-    updateStats();
-  }
+  function reset(){ initGrid(); initBees(parseInt(beeCountEl.value,10)); updateStats(); }
 
-  // UI wiring
+  // UI
   beeCountOut.textContent = beeCountEl.value;
   resourceOut.textContent = (resourceEl.value/100).toFixed(2)+"×";
-
   beeCountEl.addEventListener('input',()=>{
     beeCountOut.textContent = beeCountEl.value;
-    // add/remove bees live
     const desired = parseInt(beeCountEl.value,10);
     const diff = desired - bees.length;
     if(diff>0){
@@ -273,22 +259,16 @@
       }
     } else if(diff<0){ bees.length = desired; }
   });
-  resourceEl.addEventListener('input',()=>{
-    resourceOut.textContent = (resourceEl.value/100).toFixed(2)+"×";
-  });
-  pauseBtn.addEventListener('click',()=>{
-    running = !running;
-    pauseBtn.textContent = running? 'Pause':'Resume';
-  });
+  resourceEl.addEventListener('input',()=>{ resourceOut.textContent = (resourceEl.value/100).toFixed(2)+"×"; });
+  pauseBtn.addEventListener('click',()=>{ running = !running; pauseBtn.textContent = running? 'Pause':'Resume'; });
   resetBtn.addEventListener('click', reset);
 
   function pickNextCell(c){
     const ns = ensureNeighbors(c);
-    // bias: prefer neighbors that are already built to extend comb
     const choices = [];
     ns.forEach(n=>{
       const base = 1;
-      const bias = n.built ? 5 : 1; // prefer built areas
+      const bias = n.built ? 5 : 1; // extend comb
       const edge = Math.max(0, 1 - (n.honey));
       const w = base + bias + edge;
       for(let k=0;k<w;k++) choices.push(n);
@@ -298,13 +278,12 @@
 
   function updateBees(dt){
     const res = resourceEl.value/100; // 0..2
-    const buildRate = BUILD_BASE_RATE*res;
-    const fillRate = HONEY_FILL_RATE*res;
-    const broodRate = BROOD_RATE*res;
-    const pollenRate = POLLEN_RATE*res;
+    const buildRate = 0.0018*res;
+    const fillRate  = 0.002*res;
+    const broodRate = 0.004*res;
+    const pollenRate= 0.003*res;
 
-    // Occasionally seed a new cluster at random existing built cell to mimic multi-nucleation
-    if(Math.random() < SEED_JUMP_CHANCE*res){
+    if(Math.random() < 0.002*res){
       const built = cellList.filter(c=>c.built);
       if(built.length){
         const seed = built[(Math.random()*built.length)|0];
@@ -313,48 +292,22 @@
     }
 
     for(const b of bees){
-      // Randomly choose next target cell sometimes
-      if(!b.target || Math.random()<0.02){
-        b.target = pickNextCell(b.cell);
-      }
-      // Move toward target center with some jitter
+      if(!b.target || Math.random()<0.02){ b.target = pickNextCell(b.cell); }
       const tx = b.target.x + (Math.random()-0.5)*2;
       const ty = b.target.y + (Math.random()-0.5)*2;
-      const dx = tx - b.x; const dy = ty - b.y;
+      const dx = tx - b.x, dy = ty - b.y;
       const dist = Math.hypot(dx,dy)+1e-6;
       const step = Math.min(dist, b.speed*dt*60);
-      b.x += dx/dist*step;
-      b.y += dy/dist*step;
-
-      // Trail history
+      b.x += dx/dist*step; b.y += dy/dist*step;
       b.hx.push(b.x); b.hy.push(b.y);
-      if(b.hx.length>TRAIL_LEN){ b.hx.shift(); b.hy.shift(); }
-
-      // Arrived near target: act
+      if(b.hx.length>15){ b.hx.shift(); b.hy.shift(); }
       if(dist<2.5){
-        b.cell = b.target;
-        const c = b.cell;
-        // Decide action: build wax or store brood/pollen/honey with spatial preference
-        if(!c.built){
-          if(Math.random()<buildRate*dt*60){ c.built = true; }
-        } else {
-          // Priority: brood (center) > pollen (ring) > honey (outer)
-          if(c.dist <= BROOD_TARGET_RADIUS){
-            if(Math.random()<broodRate*dt*60){
-              c.brood = Math.min(1, c.brood + 0.08*Math.random());
-              c.honey=0; c.pollen=0;
-            }
-          } else if(c.dist > POLLEN_RING_IN && c.dist <= POLLEN_RING_OUT){
-            if(Math.random()<pollenRate*dt*60){
-              c.pollen = Math.min(1, c.pollen + 0.08*Math.random());
-              if(c.pollen>0.2){ c.honey=0; c.brood=0; }
-            }
-          } else {
-            if(Math.random()<fillRate*dt*60){
-              c.honey = Math.min(1, c.honey + 0.05*Math.random());
-              if(c.honey>0.2){ c.pollen=0; c.brood=0; }
-            }
-          }
+        b.cell = b.target; const c = b.cell;
+        if(!c.built){ if(Math.random()<buildRate*dt*60) c.built=true; }
+        else {
+          if(c.dist <= 6){ if(Math.random()<broodRate*dt*60){ c.brood=Math.min(1,c.brood+0.08*Math.random()); c.honey=0; c.pollen=0; } }
+          else if(c.dist>7 && c.dist<=11){ if(Math.random()<pollenRate*dt*60){ c.pollen=Math.min(1,c.pollen+0.08*Math.random()); if(c.pollen>0.2){ c.honey=0; c.brood=0; } } }
+          else { if(Math.random()<fillRate*dt*60){ c.honey=Math.min(1,c.honey+0.05*Math.random()); if(c.honey>0.2){ c.pollen=0; c.brood=0; } } }
         }
       }
     }
@@ -362,29 +315,17 @@
 
   function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    // Draw cells: wax base, then brood/pollen/honey overlays
     for(const c of cellList){
       if(c.x < -HEX_W || c.x > W+HEX_W || c.y < -HEX_H || c.y > H+HEX_H) continue;
       if(c.built){
-        // base wax
         drawHex(c.x,c.y,'rgba(255,233,166,0.9)','rgba(247,216,120,0.8)');
-
-        // brood overlay (soft pink)
-        if(c.brood>0){
-          const alpha = 0.35 + 0.55*c.brood;
-          drawHex(c.x,c.y,`rgba(255,183,166,${alpha})`,'rgba(255,210,210,0.9)');
-        }
-
-        // pollen overlay (golden gradient) when no brood
+        if(c.brood>0){ const a = 0.35 + 0.55*c.brood; drawHex(c.x,c.y,`rgba(255,183,166,${a})`,'rgba(255,210,210,0.9)'); }
         if(c.pollen>0 && c.brood===0){
           const gP = ctx.createLinearGradient(c.x-HEX_SIZE, c.y-HEX_SIZE, c.x+HEX_SIZE, c.y+HEX_SIZE);
           gP.addColorStop(0, `rgba(255,213,74,${0.25+0.5*c.pollen})`);
           gP.addColorStop(1, `rgba(228,165,0,${0.35+0.5*c.pollen})`);
           drawHex(c.x,c.y,gP,'rgba(255,220,120,0.9)');
         }
-
-        // honey overlay (amber) if no brood/pollen
         if(c.honey>0 && c.brood===0 && c.pollen===0){
           const g = ctx.createLinearGradient(c.x, c.y-HEX_SIZE, c.x, c.y+HEX_SIZE);
           g.addColorStop(0, 'rgba(244,162,89,'+(0.35+0.45*c.honey)+')');
@@ -392,79 +333,42 @@
           drawHex(c.x,c.y,g,'rgba(255,210,110,0.9)');
         }
       } else {
-        // faint lattice hint
         drawHex(c.x,c.y,null,'rgba(255,255,255,0.05)');
       }
     }
-
-    // Draw bee trails (faint)
-    ctx.lineWidth = 1.5*DPR;
-    ctx.lineCap = 'round';
+    ctx.lineWidth = 1.5*DPR; ctx.lineCap = 'round';
     for(const b of bees){
       ctx.beginPath();
       for(let i=0;i<b.hx.length;i++){
-        const t = i/(b.hx.length-1);
-        const alpha = t*0.35; // older points faint
-        if(i>0){
-          ctx.strokeStyle = `rgba(255,209,0,${alpha})`;
-          ctx.moveTo(b.hx[i-1], b.hy[i-1]);
-          ctx.lineTo(b.hx[i], b.hy[i]);
-          ctx.stroke();
-        }
+        const t=i/(b.hx.length-1); const alpha=t*0.35;
+        if(i>0){ ctx.strokeStyle=`rgba(255,209,0,${alpha})`; ctx.moveTo(b.hx[i-1],b.hy[i-1]); ctx.lineTo(b.hx[i],b.hy[i]); ctx.stroke(); }
       }
     }
-
-    // Draw bees
     for(const b of bees){
       const grd = ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,4*DPR);
-      grd.addColorStop(0,'rgba(255,209,0,1)');
-      grd.addColorStop(1,'rgba(255,176,0,0.1)');
-      ctx.fillStyle = grd;
-      ctx.beginPath();
-      ctx.arc(b.x,b.y,3.2*DPR,0,Math.PI*2);
-      ctx.fill();
+      grd.addColorStop(0,'rgba(255,209,0,1)'); grd.addColorStop(1,'rgba(255,176,0,0.1)');
+      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(b.x,b.y,3.2*DPR,0,Math.PI*2); ctx.fill();
     }
   }
 
   function updateStats(){
     let built=0, honey=0, pollen=0, brood=0;
-    for(const c of cellList){
-      if(c.built) built++;
-      if(c.honey>0.02) honey++;
-      if(c.pollen>0.02) pollen++;
-      if(c.brood>0.02) brood++;
-    }
-    cellsBuiltEl.textContent = built;
-    cellsHoneyEl.textContent = honey;
-    cellsPollenEl.textContent = pollen;
-    cellsBroodEl.textContent = brood;
+    for(const c of cellList){ if(c.built) built++; if(c.honey>0.02) honey++; if(c.pollen>0.02) pollen++; if(c.brood>0.02) brood++; }
+    cellsBuiltEl.textContent = built; cellsHoneyEl.textContent = honey; cellsPollenEl.textContent = pollen; cellsBroodEl.textContent = brood;
   }
 
   function loop(t){
-    const dt = Math.min(0.05, (t-last)/1000); // cap delta
-    last = t;
-    if(running){
-      updateBees(dt);
-      updateStats();
-    }
+    const dt = Math.min(0.05, (t-last)/1000); last = t;
+    if(running){ updateBees(dt); updateStats(); }
     draw();
-
-    // fps
-    const fps = 1/Math.max(1e-6,dt);
-    fpsAvg = fpsAvg*0.9 + fps*0.1;
-    fpsEl.textContent = fpsAvg.toFixed(0);
-
+    const fps = 1/Math.max(1e-6,dt); fpsAvg = fpsAvg*0.9 + fps*0.1; fpsEl.textContent = fpsAvg.toFixed(0);
     requestAnimationFrame(loop);
   }
 
   function resize(){
     const rect = canvas.parentElement.getBoundingClientRect();
-    let Wcss = Math.floor(rect.width);
-    let Hcss = Math.floor(rect.height);
-    // When 100dvh fallback is active, ensure height uses --vh
-    if(!CSS.supports('height', '100dvh')){
-      Hcss = Math.floor(window.innerHeight);
-    }
+    let Wcss = Math.floor(rect.width), Hcss = Math.floor(rect.height);
+    if(!CSS.supports('height','100dvh')){ Hcss = Math.floor(window.innerHeight); }
     W = Wcss; H = Hcss;
     canvas.width = Math.floor(W*DPR); canvas.height = Math.floor(H*DPR);
     canvas.style.width = W+'px'; canvas.style.height = H+'px';
@@ -472,8 +376,7 @@
   }
 
   // Kickoff
-  reset();
-  requestAnimationFrame(loop);
+  initGrid(); initBees(120); requestAnimationFrame(loop);
 })();
 </script>
 </body>
